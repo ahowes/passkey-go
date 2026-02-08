@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Passkey Go</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #333; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .container { background: #fff; padding: 3rem; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); max-width: 520px; width: 90%; }
+        h1 { margin-bottom: 0.5rem; font-size: 1.5rem; }
+        .welcome { color: #666; margin-bottom: 2rem; font-size: 0.95rem; }
+        .card { background: #f9fafb; padding: 1.25rem; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: #9ca3af; margin-bottom: 0.75rem; }
+        .detail { display: flex; justify-content: space-between; padding: 0.4rem 0; font-size: 0.95rem; }
+        .detail .label { color: #666; }
+        .detail .value { font-weight: 600; }
+        button { width: 100%; padding: 0.75rem; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; background: #ef4444; color: #fff; transition: background 0.2s; }
+        button:hover { background: #dc2626; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Dashboard</h1>
+        <p class="welcome">Welcome, {{ .User.DisplayName }}</p>
+
+        <div class="card">
+            <h2>Account Details</h2>
+            <div class="detail">
+                <span class="label">Username</span>
+                <span class="value">{{ .User.Username }}</span>
+            </div>
+            <div class="detail">
+                <span class="label">Display Name</span>
+                <span class="value">{{ .User.DisplayName }}</span>
+            </div>
+            <div class="detail">
+                <span class="label">Registered Passkeys</span>
+                <span class="value">{{ .CredentialCount }}</span>
+            </div>
+            <div class="detail">
+                <span class="label">Account Created</span>
+                <span class="value">{{ .User.CreatedAt.Format "Jan 2, 2006" }}</span>
+            </div>
+        </div>
+
+        <form action="/logout" method="POST">
+            <button type="submit">Sign Out</button>
+        </form>
+    </div>
+</body>
+</html>

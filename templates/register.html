@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - Passkey Go</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #333; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .container { background: #fff; padding: 3rem; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); max-width: 480px; width: 90%; }
+        h1 { margin-bottom: 0.5rem; font-size: 1.5rem; }
+        p.subtitle { margin-bottom: 2rem; color: #666; font-size: 0.9rem; }
+        label { display: block; font-weight: 600; margin-bottom: 0.25rem; font-size: 0.9rem; }
+        input[type="text"] { width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 1rem; margin-bottom: 1rem; }
+        input[type="text"]:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+        button { width: 100%; padding: 0.75rem; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; background: #4f46e5; color: #fff; transition: background 0.2s; }
+        button:hover { background: #4338ca; }
+        button:disabled { background: #9ca3af; cursor: not-allowed; }
+        .status { margin-top: 1rem; padding: 0.75rem; border-radius: 8px; font-size: 0.9rem; display: none; }
+        .status.error { display: block; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+        .status.success { display: block; background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+        .status.info { display: block; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+        .back { display: block; text-align: center; margin-top: 1.5rem; color: #4f46e5; text-decoration: none; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Create Account</h1>
+        <p class="subtitle">Register a passkey for passwordless sign-in</p>
+        <form id="registerForm" onsubmit="return false;">
+            <label for="username">Username</label>
+            <input type="text" id="username" placeholder="Enter a username" required autocomplete="username webauthn">
+            <label for="displayName">Display Name</label>
+            <input type="text" id="displayName" placeholder="Enter your display name">
+            <button type="button" id="registerBtn" onclick="register()">Register Passkey</button>
+        </form>
+        <div id="status" class="status"></div>
+        <a href="/" class="back">Back to home</a>
+    </div>
+    <script>
+        function bufferToBase64url(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let str = '';
+            for (const b of bytes) str += String.fromCharCode(b);
+            return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        }
+
+        function base64urlToBuffer(base64url) {
+            const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+            const padded = base64 + '='.repeat((4 - base64.length % 4) % 4);
+            const binary = atob(padded);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            return bytes.buffer;
+        }
+
+        function setStatus(msg, type) {
+            const el = document.getElementById('status');
+            el.textContent = msg;
+            el.className = 'status ' + type;
+        }
+
+        async function register() {
+            const username = document.getElementById('username').value.trim();
+            const displayName = document.getElementById('displayName').value.trim() || username;
+            const btn = document.getElementById('registerBtn');
+
+            if (!username) {
+                setStatus('Please enter a username.', 'error');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Starting registration...';
+            setStatus('Contacting server...', 'info');
+
+            try {
+                const beginResp = await fetch('/api/register/begin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username, display_name: displayName }),
+                });
+
+                if (!beginResp.ok) {
+                    const err = await beginResp.json();
+                    throw new Error(err.error || 'Registration failed');
+                }
+
+                const options = await beginResp.json();
+
+                options.publicKey.challenge = base64urlToBuffer(options.publicKey.challenge);
+                options.publicKey.user.id = base64urlToBuffer(options.publicKey.user.id);
+                if (options.publicKey.excludeCredentials) {
+                    options.publicKey.excludeCredentials = options.publicKey.excludeCredentials.map(c => ({
+                        ...c,
+                        id: base64urlToBuffer(c.id),
+                    }));
+                }
+
+                setStatus('Please interact with your authenticator...', 'info');
+                const credential = await navigator.credentials.create(options);
+
+                setStatus('Verifying with server...', 'info');
+
+                const attestationResponse = {
+                    id: credential.id,
+                    rawId: bufferToBase64url(credential.rawId),
+                    type: credential.type,
+                    response: {
+                        attestationObject: bufferToBase64url(credential.response.attestationObject),
+                        clientDataJSON: bufferToBase64url(credential.response.clientDataJSON),
+                    },
+                };
+
+                if (credential.response.getTransports) {
+                    attestationResponse.response.transports = credential.response.getTransports();
+                }
+                if (credential.authenticatorAttachment) {
+                    attestationResponse.authenticatorAttachment = credential.authenticatorAttachment;
+                }
+
+                const finishResp = await fetch('/api/register/finish', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(attestationResponse),
+                });
+
+                if (!finishResp.ok) {
+                    const err = await finishResp.json();
+                    throw new Error(err.error || 'Registration verification failed');
+                }
+
+                setStatus('Registration successful! Redirecting...', 'success');
+                setTimeout(() => { window.location.href = '/dashboard'; }, 1000);
+
+            } catch (err) {
+                console.error('Registration error:', err);
+                setStatus(err.message || 'Registration failed. Please try again.', 'error');
+                btn.disabled = false;
+                btn.textContent = 'Register Passkey';
+            }
+        }
+    </script>
+</body>
+</html>
