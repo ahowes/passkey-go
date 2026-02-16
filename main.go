@@ -19,7 +19,7 @@ import (
 func main() {
 	cfg := config.Load()
 
-	database := db.Connect(cfg.DatabaseDSN)
+	database := db.Connect(cfg.DatabaseDSN, cfg.DatabaseUser, cfg.DatabasePassword)
 	defer database.Close()
 
 	if err := db.CreateTables(context.Background(), database); err != nil {

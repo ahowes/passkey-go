@@ -11,8 +11,15 @@ import (
 	"github.com/ahowes/passkey-go/models"
 )
 
-func Connect(dsn string) *bun.DB {
-	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
+func Connect(dsn, user, password string) *bun.DB {
+	opts := []pgdriver.Option{pgdriver.WithDSN(dsn)}
+	if user != "" {
+		opts = append(opts, pgdriver.WithUser(user))
+	}
+	if password != "" {
+		opts = append(opts, pgdriver.WithPassword(password))
+	}
+	sqldb := sql.OpenDB(pgdriver.NewConnector(opts...))
 	return bun.NewDB(sqldb, pgdialect.New())
 }
 
